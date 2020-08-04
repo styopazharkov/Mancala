@@ -1,1 +1,3 @@
 # Mancala
+
+AI for Mancala
