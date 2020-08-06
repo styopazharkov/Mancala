@@ -1,4 +1,4 @@
-#VERSION 0.1.0
+#VERSION 0.2.2
 import random
 from copy import deepcopy
 import pygame, sys
@@ -11,9 +11,9 @@ class MancalaGame():
         self.turn=0 #who goes first
         self.state0=[stones_in_each_spot for _ in range (spots_on_each_side)] #player 0 state
         self.state1=[stones_in_each_spot for _ in range (spots_on_each_side)] #player 1 state
-        self.score0, self.score1 = 0, 0 #current scores
-        self.gameState=[self.state0,self.state1,self.score0,self.score1] #game stате
+        self.gameState=[self.state0,self.state1,0,0] #game stате
         self.skipped=False #if current turn is skipped
+        # self.history=[]
 
     def getPossMoves(self): #of the form "skip", 0, 1, 2, 3,...
         if self.skipped:
@@ -38,6 +38,7 @@ class MancalaGame():
             
         self.skipped=False
         if move!=-1: #if this turn is not skipped
+            self.history.append(deepcopy(self.gameState))
             hand=self.gameState[self.turn][move] #how many stones in hand
             self.gameState[self.turn][move]=0 #take all stones out
             side=self.turn #which side of board we are on
@@ -69,23 +70,26 @@ class MancalaGame():
 
 class CUI():
     def __init__(self):
-        self.ai0=MiniMaxAI(0)
-        self.ai1=MiniMaxAI(0)
-        self.game=MancalaGame()
+        self.ai0=MiniMaxAI(10)
+        self.ai1=MiniMaxAI(10)
+        self.game=MancalaGame(3,4)
         looping=True
         while looping:
+            self.printBoard()
             possMoves=self.game.getPossMoves()
             sPossMoves=[str(move) for move in possMoves]
-            self.printBoard()
             isWin=self.game.isWin(possMoves)
             if isWin==1:
                 print("1 won")
+                print(self.ai0.getScoreWin(self.game))
                 looping=False
             elif isWin==0:
                 print("0 won")
+                print(self.ai0.getScoreWin(self.game))
                 looping=False
             elif isWin==0.5:
                 print("draw")
+                print(self.ai0.getScoreWin(self.game))
                 looping=False
             else:
                 if self.game.turn==0:
@@ -104,6 +108,7 @@ class CUI():
                 print(self.game.turn)
     def printBoard(self):
         print()
+        print(self.game.turn)
         for spot in self.game.state1[::-1]:
             print(spot, end=" ")
         print()
@@ -122,12 +127,12 @@ class MiniMaxAI():
         move=possMoves.pop(random.randint(0,len(possMoves)-1))
         temp_game=deepcopy(game)
         temp_game.makeMove(move)
-        bestScore=self.minimax(temp_game, self.depth, temp_game.turn, temp_game.getPossMoves(), -10000, 10000)
+        bestScore=self.minimax(temp_game, self.depth, temp_game.turn, temp_game.getPossMoves(), -1000000, 1000000)
         bestMove=move
         for move in possMoves:
             temp_game=deepcopy(game)
             temp_game.makeMove(move)
-            temp_score=self.minimax(temp_game, self.depth, temp_game.turn, temp_game.getPossMoves(), -10000, 10000)
+            temp_score=self.minimax(temp_game, self.depth, temp_game.turn, temp_game.getPossMoves(), -1000000, 1000000)
             if game.turn==0:
                 if temp_score>bestScore:
                     bestMove=move
@@ -139,27 +144,39 @@ class MiniMaxAI():
         return bestMove
     
     def minimax(self, game, depth, turn, possMoves, alpha, beta): #returns minimax score with alpha-beta pruning
+        # print(str(depth)+" deep")
+        if game.isWin(possMoves)==0:
+            score=1000*self.getScoreWin(game)
+            # print(str(score)+str(game.gameState))
+            return score
+        elif game.isWin(possMoves)==1:
+            score=1000*self.getScoreWin(game)
+            # print(str(score)+str(game.gameState))
+            return score
+        elif game.isWin(possMoves)==0.5:
+            score=0
+            # print(str(score)+str(game.gameState))
+            return score
         if depth == 0:
             score=self.getScore(game)
+            # print(str(score)+str(game.gameState))
             return score
-        if game.isWin(possMoves)==0:
-            return 10000*self.getScoreWin(game)
-        elif game.isWin(possMoves)==1:
-            return 10000*self.getScoreWin(game)
         if turn==0:
-            score = -100000
+            score = -10000000
             for move in possMoves:
+                # print(str(move)+" sub")
                 temp_game=self.altDeepcopy(game)
                 temp_game.makeMove(move)
                 score = max(score, self.minimax(temp_game, depth-1, 1, temp_game.getPossMoves(), alpha, beta))
                 alpha=max(alpha,score)
-                #for some reason this part of pruning doesn't work
-                # if beta <= alpha: 
-                #     break
+                # for some reason this part of pruning doesn't work
+                if beta <= alpha: 
+                    break
             return score
         else: #turn=1
-            score = 100000
+            score = 10000000
             for move in possMoves:
+                # print(str(move)+" sub")
                 temp_game=self.altDeepcopy(game)
                 temp_game.makeMove(move)
                 score = min(score, self.minimax(temp_game, depth-1, 0, temp_game.getPossMoves(), alpha, beta))
@@ -173,22 +190,22 @@ class MiniMaxAI():
         new.turn=game.turn
         new.state0=game.state0[:]
         new.state1=game.state1[:]
-        new.score0=game.score0
-        new.score1=game.score1
-        new.gameState=[new.state0,new.state1,new.score0,new.score1]
+        new.gameState=[new.state0,new.state1,game.gameState[2],game.gameState[3]]
         new.skipped=game.skipped
         return new
 
 
     def getScore(self, game):
-        return game.gameState[2]-game.gameState[3]+(sum(game.gameState[0])-sum(game.gameState[1]))*0.05
+        return game.gameState[2]-game.gameState[3]+(sum(game.gameState[0])-sum(game.gameState[1]))*0.01
     
     def getScoreWin(self, game):
         return game.gameState[2]-game.gameState[3]+(sum(game.gameState[0])-sum(game.gameState[1]))*1
 
 class GUI():
     def __init__(self):
-        self.unit=60
+        self.backgroundColor=(153, 102, 51)
+        self.spotColor=(115, 77, 38)
+        self.unit=70
         pygame.init()
         self.clock = pygame.time.Clock()
         self.WIN_WIDTH = 800
@@ -247,7 +264,7 @@ class GUI():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-            self.win.fill((255,255,255))
+            self.win.fill(self.backgroundColor)
             self.createText("Please select computer difficulty",self.WIN_WIDTH//2,self.WIN_HEIGHT//4,45,(0,0,0))
             self.createButton("back", "back", self.WIN_WIDTH-100,0,100,30, (170,170,170), (140,140,140), 20, self.loopReturn, "mode_select")
             self.createButton( "easy", "Easy", 200,200,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "playEasy")
@@ -302,7 +319,7 @@ class GUI():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-            self.win.fill((255,255,255))
+            self.win.fill(self.backgroundColor)
             self.drawBoard()
             self.drawPieces()
             pygame.display.update()
@@ -317,6 +334,7 @@ class GUI():
                 sys.exit()
             elif isWin==0:
                 print("0 won")
+                # print(self.game.history)
                 self.clock.tick(1)
                 pygame.quit()
                 sys.exit()
@@ -344,7 +362,6 @@ class GUI():
         def getSpot(mouse, possMoves):
             for possMove in possMoves:
                 location=self.spotDict[(self.game.turn,possMove)]
-                print(possMoves)
                 if -self.unit//2<location[0]-mouse[0]<self.unit//2 and -self.unit//2<location[1]-mouse[1]<self.unit//2:
                     print("move: "+str(possMove))
                     return possMove
@@ -361,12 +378,14 @@ class GUI():
                     spot=getSpot(mouse, possMoves)
                     if spot!="Not Valid":
                         return spot
+
+            self.createButton("chmod","Change Mode", 5,5,145,30, (170,170,170), (140,140,140), 20, self.loopReturn, "mode_select")
+            if self.mode!="PvP":
+                self.createButton("chdiff","Change Difficulty", 155,5,185,30, (170,170,170), (140,140,140), 20, self.loopReturn, "ai_select")
             self.drawBoard()
             self.drawPieces()
             pygame.display.update()
             self.clock.tick(60)
-
-                    
 
     def startBlankGame(self): #starts a blank game
         self.game=MancalaGame()
@@ -407,11 +426,20 @@ class GUI():
             pygame.draw.line(win, color, pair[0], pair[1], radius*2)
 
     def drawBoard(self): #draws the game board
+        margin=5
         for side in range(2):
             for spot in range(self.game.spots_on_each_side):
-                 pygame.draw.circle(self.win, (100,100,100), self.spotDict[(side,spot)], 20)
-        pygame.draw.circle(self.win, (100,100,100), self.spotDict["score0"], 30)
-        pygame.draw.circle(self.win, (100,100,100), self.spotDict["score1"], 30)
+                loc=self.spotDict[(side,spot)]
+                dims=(loc[0]-self.unit//2+margin,loc[1]-self.unit+margin,self.unit-margin*2,self.unit*2-margin*2)
+                self.drawRoundedRect(self.win, self.spotColor, dims, 7)
+
+        loc=self.spotDict["score0"]
+        dims=(loc[0]-self.unit//2+margin,loc[1]-self.unit*2+margin,self.unit-margin*2,self.unit*4-margin*2)
+        self.drawRoundedRect(self.win, self.spotColor, dims, 7)
+        loc=self.spotDict["score1"]
+        dims=(loc[0]-self.unit//2+margin,loc[1]-self.unit*2+margin,self.unit-margin*2,self.unit*4-margin*2)
+        self.drawRoundedRect(self.win, self.spotColor, dims, 7)
+        
 
     def drawPieces(self): #draws the pieces of a given game
         for spot in range(self.game.spots_on_each_side): #player 0
@@ -427,16 +455,17 @@ class GUI():
 
     def makeSpotDict(self): #creates dict with all the spots
         dic={}
+        backStart=self.unit*(self.game.spots_on_each_side-1)//2
         for spot in range(self.game.spots_on_each_side):
-            dic[(0,spot)]=(self.boardCenter[0]-200+self.unit*spot,self.boardCenter[1]+self.unit)
+            dic[(0,spot)]=(self.boardCenter[0]-backStart+self.unit*spot,self.boardCenter[1]+self.unit)
         for spot in range(self.game.spots_on_each_side):
-            dic[(1,spot)]=(self.boardCenter[0]+200-self.unit*spot,self.boardCenter[1]-self.unit)
-        dic["score0"]=(self.boardCenter[0]+350,self.boardCenter[1])
-        dic["score1"]=(self.boardCenter[0]-350,self.boardCenter[1])
+            dic[(1,spot)]=(self.boardCenter[0]+backStart-self.unit*spot,self.boardCenter[1]-self.unit)
+        dic["score0"]=(self.boardCenter[0]+backStart+self.unit,self.boardCenter[1])
+        dic["score1"]=(self.boardCenter[0]-backStart-self.unit,self.boardCenter[1])
         return dic
 
-
-GUI()
+if __name__=="__main__":
+    GUI()
 
 
 
