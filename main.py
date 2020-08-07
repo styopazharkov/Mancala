@@ -1,4 +1,4 @@
-#VERSION 0.2.3
+#VERSION 0.3.0
 import random
 from copy import deepcopy
 import pygame, sys
@@ -14,6 +14,7 @@ class MancalaGame():
         self.gameState=[self.state0,self.state1,0,0] #game stате
         self.skipped=False #if current turn is skipped
         self.history=[]
+        self.prevMove=None
 
     def getPossMoves(self): #of the form "skip", 0, 1, 2, 3,...
         if self.skipped:
@@ -38,7 +39,8 @@ class MancalaGame():
             
         self.skipped=False
         if move!=-1: #if this turn is not skipped
-            self.history.append((self.turn,self.skipped,deepcopy(self.gameState)))
+            self.history.append((self.turn,self.skipped,deepcopy(self.gameState),self.prevMove))
+            self.prevMove=(self.turn,move)
             hand=self.gameState[self.turn][move] #how many stones in hand
             self.gameState[self.turn][move]=0 #take all stones out
             side=self.turn #which side of board we are on
@@ -61,6 +63,7 @@ class MancalaGame():
         self.turn=state[0]
         self.skipped=state[1]
         self.gameState=state[2]
+        self.prevMove=state[3]
 
     def isWin(self, possMoves):
         if not possMoves:
@@ -220,6 +223,11 @@ class GUI():
         self.boardCenter=self.winCenter
         self.win = pygame.display.set_mode((self.WIN_WIDTH, self.WIN_HEIGHT))
         self.pressedButtons=defaultdict(lambda: False)
+        self.stoneHistory=[]
+        #self.stoneState
+        #self.game
+        #self.spotDict
+        #self.mode
         pygame.display.set_caption("Mancala")
         self.introLoop()
         pygame.quit()
@@ -229,6 +237,7 @@ class GUI():
         self.mode="PvP"
         self.startBlankGame()
         self.spotDict=self.makeSpotDict()
+        self.stoneState=self.createStoneState()
         gameOn = True 
         while gameOn:
             for event in pygame.event.get():
@@ -237,7 +246,7 @@ class GUI():
                     sys.exit()
             self.win.fill((255,255,255))
             self.createText("Welcome to Mancala",self.WIN_WIDTH//2,self.WIN_HEIGHT*1//3,45,(0,0,0))
-            self.createButton("new", "New Game",180,350,150,70, (170,170,170), (140,140,140), 20, self.loopReturn, "mode_select")
+            self.createButton("new", "New Game",200,350,400,70, (170,170,170), (140,140,140), 20, self.loopReturn, "mode_select")
             #self.createButton("rules", "Rules",470,350,150,70, (170,170,170), (140,140,140), 20, self.loopReturn, "rules_from_intro")
             pygame.display.update()
             self.clock.tick(60)
@@ -329,6 +338,7 @@ class GUI():
                     pygame.quit()
                     sys.exit()
             self.win.fill(self.backgroundColor)
+            self.drawHighlight()
             self.drawBoard()
             self.drawPieces()
             pygame.display.update()
@@ -338,34 +348,44 @@ class GUI():
             isWin=self.game.isWin(possMoves)
             if isWin==1:
                 print("1 won")
-                self.clock.tick(1)
-                pygame.quit()
-                sys.exit()
+                score=(self.game.gameState[2]+sum(self.game.gameState[0]),self.game.gameState[3]+sum(self.game.gameState[1]))
+                if self.mode =="AIvP":
+                    self.winLoop("Human", score)
+                elif self.mode =="PvAI":
+                    self.winLoop("Computer", score)
+                elif self.mode =="AIvAI":
+                    self.winLoop("Computer 2", score)
+                elif self.mode =="PvP":
+                    self.winLoop("Player 2", score)
             elif isWin==0:
                 print("0 won")
-                # print(self.game.history)
-                self.clock.tick(1)
-                pygame.quit()
-                sys.exit()
+                score=(self.game.gameState[2]+sum(self.game.gameState[0]),self.game.gameState[3]+sum(self.game.gameState[1]))
+                if self.mode =="AIvP":
+                    self.winLoop("Computer", score)
+                elif self.mode =="PvAI":
+                    self.winLoop("Human", score)
+                elif self.mode =="AIvAI":
+                    self.winLoop("Computer 1", score)
+                elif self.mode =="PvP":
+                    self.winLoop("Player 1", score)
             elif isWin==0.5:
                 print("draw")
-                self.clock.tick(1)
-                pygame.quit()
-                sys.exit()
+                score=(self.game.gameState[2]+sum(self.game.gameState[0]),self.game.gameState[3]+sum(self.game.gameState[1]))
+                self.winLoop("Draw", score)
             if self.game.turn==0:
                 if self.mode in {"AIvAI", "AIvP"}:
                     move=self.ai.getMove(self.game, possMoves)
-                    self.game.makeMove(move)
+                    self.moveStones(move, 0)
                 else:
                     move=self.waitForMoveLoop(possMoves)
-                    self.game.makeMove(move)
+                    self.moveStones(move, 0)
             else: #turn =1
                 if self.mode in {"AIvAI", "PvAI"}:
                     move=self.ai.getMove(self.game, possMoves)
-                    self.game.makeMove(move)
+                    self.moveStones(move, 1)
                 else:
                     move=self.waitForMoveLoop(possMoves)
-                    self.game.makeMove(move)
+                    self.moveStones(move, 1)
  
     def waitForMoveLoop(self, possMoves): #SHOULD return the move that the human wants to make
         def incrementA(a,colorTrend): #changes the possmovecolor
@@ -422,8 +442,61 @@ class GUI():
             pygame.display.update()
             self.clock.tick(60)
 
+    def winLoop(self, winner, score):
+        gameOn = True 
+        while gameOn:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+            self.win.fill(self.backgroundColor)
+            if winner=="Draw":
+                text= "It's a draw: "+ str(score[0])+" to "+ str(score[1])+"."
+            else:
+                text=winner + " has won the game: "+ str(score[0])+" to "+ str(score[1])+"."
+
+            self.drawBoard()
+            self.drawPieces()
+            self.createText(text,self.WIN_WIDTH//2,self.WIN_HEIGHT//7,35,(0,0,0))
+            self.createButton( "again", "Play Again", 300,450,200,50, (170,170,170), (140,140,140), 23, self.loopReturn, "intro")
+            pygame.display.update()
+            self.clock.tick(60)
+        return
+
     def startBlankGame(self): #starts a blank game
         self.game=MancalaGame()
+
+    def createStoneState(self):
+        stoneState=[[],[],[],[]]
+        for side in range(2):
+            for spot in range(self.game.spots_on_each_side):
+                stoneState[side].append([])
+                for _ in range(self.game.stones_in_each_spot):
+                    x=(random.random()*2-1) #from -1 to 1
+                    y=(random.random()*2-1) #from -1 to 1
+                    stoneState[side][spot].append((x,y,(random.randint(0,255),random.randint(0,255),random.randint(50,255))))
+        return stoneState
+
+    def moveStones(self, move, turn):
+        if move!=-1:
+            self.stoneHistory.append(deepcopy(self.stoneState))
+            hand=self.stoneState[turn][move]
+            self.stoneState[turn][move]=[]
+            self.game.makeMove(move)
+            for side in range(2):
+                for spot in range(self.game.spots_on_each_side):
+                    if self.game.gameState[side][spot]<len(self.stoneState[side][spot]): #moves captured accross stones to scorebox
+                        self.stoneState[3-side]+=self.stoneState[side][spot]
+                        self.stoneState[side][spot]=[]
+                    else:
+                        while self.game.gameState[side][spot]>len(self.stoneState[side][spot]): #adds all stones from hand
+                            self.stoneState[side][spot].append(hand.pop())
+            for scoreBox in range(2):
+                while self.game.gameState[scoreBox+2]>len(self.stoneState[scoreBox+2]):
+                        self.stoneState[scoreBox+2].append(hand.pop())
+        else:
+            self.game.makeMove(move)
+
 
     def createText(self, text, x, y, size, color): #creates a line of text
         font = pygame.font.Font('freesansbold.ttf',size)
@@ -475,18 +548,40 @@ class GUI():
         dims=(loc[0]-self.unit//2+margin,loc[1]-self.unit*2+margin,self.unit-margin*2,self.unit*4-margin*2)
         self.drawRoundedRect(self.win, self.spotColor, dims, 7)
         
+    def drawStones(self, stones, center, xMax, yMax):
+        for stone in stones:
+            x=stone[0]*xMax
+            y=stone[1]*yMax
+            color=stone[2]
+            pygame.draw.circle(self.win, color, (center[0]+x,center[1]+y), 10)
+
+    def drawHighlight(self):
+        margin=3
+        if self.game.prevMove!=None:
+            loc=self.spotDict[self.game.prevMove]
+            dims=(loc[0]-self.unit//2+margin,loc[1]-self.unit+margin,self.unit-margin*2,self.unit*2-margin*2)
+            self.drawRoundedRect(self.win, (255,255,0), dims, 7)
 
     def drawPieces(self): #draws the pieces of a given game
         for spot in range(self.game.spots_on_each_side): #player 0
             loc=self.spotDict[(0,spot)]
             self.createText(str(self.game.gameState[0][spot]),loc[0]-self.unit//2+17,loc[1]-self.unit+19,15,(0,0,0))
+            stones=self.stoneState[0][spot]
+            self.drawStones(stones, loc, self.unit//2-20, self.unit-40)
+
         for spot in range(self.game.spots_on_each_side): #player 1
             loc=self.spotDict[(1,spot)]
             self.createText(str(self.game.gameState[1][spot]),loc[0]-self.unit//2+17,loc[1]-self.unit+19,15,(0,0,0))
+            stones=self.stoneState[1][spot]
+            self.drawStones(stones, loc, self.unit//2-20, self.unit-40)
         loc=self.spotDict["score0"]
-        self.createText(str(self.game.gameState[2]),loc[0],loc[1],45,(0,0,0))
+        self.createText(str(self.game.gameState[2]),loc[0]-self.unit//2+17,loc[1]-self.unit*2+19,15,(0,0,0))
+        stones=self.stoneState[2]
+        self.drawStones(stones, loc, self.unit//2-20, self.unit*2-40)
         loc=self.spotDict["score1"]
-        self.createText(str(self.game.gameState[3]),loc[0],loc[1],45,(0,0,0))
+        self.createText(str(self.game.gameState[3]),loc[0]-self.unit//2+17,loc[1]-self.unit*2+19,15,(0,0,0))
+        stones=self.stoneState[3]
+        self.drawStones(stones, loc, self.unit//2-20, self.unit*2-40)
 
     def makeSpotDict(self): #creates dict with all the spots
         dic={}
@@ -500,16 +595,24 @@ class GUI():
         return dic
 
     def undo(self): #undos last move, does nothing if no previous move
+        print(len(self.stoneHistory))
         if self.game.history:
             if self.mode=="PvP":
+                print(self.stoneState)
+                self.stoneState=self.stoneHistory.pop()
                 self.game.undo()
+                print(self.stoneState)
             elif self.mode == "PvAI":
+                self.stoneState=self.stoneHistory.pop()
                 self.game.undo()
                 while self.game.turn!=0 and self.game.history:
+                    self.stoneState=self.stoneHistory.pop()
                     self.game.undo()
             elif self.mode == "AIvP":
+                self.stoneState=self.stoneHistory.pop()
                 self.game.undo()
                 while self.game.turn!=1 and self.game.history:
+                    self.stoneState=self.stoneHistory.pop()
                     self.game.undo()
 
 if __name__=="__main__":
