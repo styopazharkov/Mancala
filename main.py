@@ -1,4 +1,4 @@
-#VERSION 0.2.2
+#VERSION 0.2.3
 import random
 from copy import deepcopy
 import pygame, sys
@@ -13,7 +13,7 @@ class MancalaGame():
         self.state1=[stones_in_each_spot for _ in range (spots_on_each_side)] #player 1 state
         self.gameState=[self.state0,self.state1,0,0] #game stате
         self.skipped=False #if current turn is skipped
-        # self.history=[]
+        self.history=[]
 
     def getPossMoves(self): #of the form "skip", 0, 1, 2, 3,...
         if self.skipped:
@@ -38,7 +38,7 @@ class MancalaGame():
             
         self.skipped=False
         if move!=-1: #if this turn is not skipped
-            self.history.append(deepcopy(self.gameState))
+            self.history.append((self.turn,self.skipped,deepcopy(self.gameState)))
             hand=self.gameState[self.turn][move] #how many stones in hand
             self.gameState[self.turn][move]=0 #take all stones out
             side=self.turn #which side of board we are on
@@ -55,6 +55,12 @@ class MancalaGame():
             if loc==-1: #if you end in your score spot
                 self.skipped=True #skip next turn
         self.turn=self.enemy(self.turn) #switch turn
+
+    def undo(self):
+        state=self.history.pop()
+        self.turn=state[0]
+        self.skipped=state[1]
+        self.gameState=state[2]
 
     def isWin(self, possMoves):
         if not possMoves:
@@ -248,7 +254,7 @@ class GUI():
                     sys.exit()
             self.win.fill((255,255,255))
             self.createText("Please select game mode",self.WIN_WIDTH//2,self.WIN_HEIGHT//4,45,(0,0,0))
-            self.createButton("back", "back", self.WIN_WIDTH-100,0,100,30, (170,170,170), (140,140,140), 20, self.loopReturn, "intro")
+            # self.createButton("back", "back", self.WIN_WIDTH-100,0,100,30, (170,170,170), (140,140,140), 20, self.loopReturn, "intro") #should lead to different places
             self.createButton( "pvp", "Human vs. Human", 200,200,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "play")
             self.createButton("pvai","Human vs. Computer", 200,270,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "ai_select_in_pvai")
             self.createButton("aivp","Computer vs. Human", 200,340,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "ai_select_in_aivp")
@@ -266,10 +272,10 @@ class GUI():
                     sys.exit()
             self.win.fill(self.backgroundColor)
             self.createText("Please select computer difficulty",self.WIN_WIDTH//2,self.WIN_HEIGHT//4,45,(0,0,0))
-            self.createButton("back", "back", self.WIN_WIDTH-100,0,100,30, (170,170,170), (140,140,140), 20, self.loopReturn, "mode_select")
+            # self.createButton("back", "back", self.WIN_WIDTH-100,0,100,30, (170,170,170), (140,140,140), 20, self.loopReturn, "mode_select") #chould lead to different places
             self.createButton( "easy", "Easy", 200,200,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "playEasy")
-            self.createButton("ok", "Okay", 200,270,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "playMedium")
-            self.createButton("decent","Decent", 200,340,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "playHard")
+            self.createButton("medium", "Medium", 200,270,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "playMedium")
+            self.createButton("hard","Hard", 200,340,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "playHard")
             self.createButton("expert", "Expert",  200,410,400,60, (170,170,170), (140,140,140), 20, self.loopReturn, "playExpert")
             pygame.display.update()
             self.clock.tick(60)
@@ -299,13 +305,16 @@ class GUI():
             self.ai=MiniMaxAI(1)
             self.playLoop()
         elif loop=="playMedium":
-            self.ai=MiniMaxAI(5)
+            self.ai=MiniMaxAI(2)
             self.playLoop()
         elif loop=="playHard":
-            self.ai=MiniMaxAI(8)
+            self.ai=MiniMaxAI(5)
             self.playLoop()
         elif loop=="playExpert":
-            self.ai=MiniMaxAI(10)
+            self.ai=MiniMaxAI(9)
+            self.playLoop()
+        elif loop=="undo":
+            self.undo()
             self.playLoop()
         elif loop=="play":
             self.playLoop()
@@ -359,13 +368,34 @@ class GUI():
                     self.game.makeMove(move)
  
     def waitForMoveLoop(self, possMoves): #SHOULD return the move that the human wants to make
+        def incrementA(a,colorTrend): #changes the possmovecolor
+            if colorTrend=="+":
+                if a>50:
+                    return a, "-"
+                else:
+                    return a+0.5, "+"
+            else:
+                if a<1:
+                    return a, "+"
+                else:
+                    return a-0.5, "-"
+
         def getSpot(mouse, possMoves):
             for possMove in possMoves:
                 location=self.spotDict[(self.game.turn,possMove)]
                 if -self.unit//2<location[0]-mouse[0]<self.unit//2 and -self.unit//2<location[1]-mouse[1]<self.unit//2:
-                    print("move: "+str(possMove))
                     return possMove
             return "Not Valid"
+
+        def drawspots(moves, a):
+            color=(max(0,self.spotColor[0]+a),max(0,self.spotColor[1]+a),max(0,self.spotColor[2]+a))
+            margin=10
+            for spot in moves:
+                loc=self.spotDict[(self.game.turn,spot)]
+                dims=(loc[0]-self.unit//2+margin,loc[1]-self.unit+margin,self.unit-margin*2,self.unit*2-margin*2)
+                self.drawRoundedRect(self.win, color, dims, 7)
+
+        a, colorTrend=0, "+"
         if possMoves==[-1]:
             return -1
         while True:
@@ -380,9 +410,14 @@ class GUI():
                         return spot
 
             self.createButton("chmod","Change Mode", 5,5,145,30, (170,170,170), (140,140,140), 20, self.loopReturn, "mode_select")
+            self.createButton("exit","Exit Game", self.WIN_WIDTH-125,5,120,30, (170,170,170), (140,140,140), 20, self.loopReturn, "intro")
             if self.mode!="PvP":
                 self.createButton("chdiff","Change Difficulty", 155,5,185,30, (170,170,170), (140,140,140), 20, self.loopReturn, "ai_select")
+            if self.mode!="AIvAI":
+                self.createButton("undo","Undo", self.WIN_WIDTH-205,5,75,30, (170,170,170), (140,140,140), 20, self.loopReturn, "undo")
             self.drawBoard()
+            drawspots(possMoves, a)
+            a, colorTrend = incrementA(a, colorTrend)
             self.drawPieces()
             pygame.display.update()
             self.clock.tick(60)
@@ -444,10 +479,10 @@ class GUI():
     def drawPieces(self): #draws the pieces of a given game
         for spot in range(self.game.spots_on_each_side): #player 0
             loc=self.spotDict[(0,spot)]
-            self.createText(str(self.game.gameState[0][spot]),loc[0],loc[1],45,(0,0,0))
+            self.createText(str(self.game.gameState[0][spot]),loc[0]-self.unit//2+17,loc[1]-self.unit+19,15,(0,0,0))
         for spot in range(self.game.spots_on_each_side): #player 1
             loc=self.spotDict[(1,spot)]
-            self.createText(str(self.game.gameState[1][spot]),loc[0],loc[1],45,(0,0,0))
+            self.createText(str(self.game.gameState[1][spot]),loc[0]-self.unit//2+17,loc[1]-self.unit+19,15,(0,0,0))
         loc=self.spotDict["score0"]
         self.createText(str(self.game.gameState[2]),loc[0],loc[1],45,(0,0,0))
         loc=self.spotDict["score1"]
@@ -463,6 +498,19 @@ class GUI():
         dic["score0"]=(self.boardCenter[0]+backStart+self.unit,self.boardCenter[1])
         dic["score1"]=(self.boardCenter[0]-backStart-self.unit,self.boardCenter[1])
         return dic
+
+    def undo(self): #undos last move, does nothing if no previous move
+        if self.game.history:
+            if self.mode=="PvP":
+                self.game.undo()
+            elif self.mode == "PvAI":
+                self.game.undo()
+                while self.game.turn!=0 and self.game.history:
+                    self.game.undo()
+            elif self.mode == "AIvP":
+                self.game.undo()
+                while self.game.turn!=1 and self.game.history:
+                    self.game.undo()
 
 if __name__=="__main__":
     GUI()
