@@ -1,4 +1,4 @@
-#VERSION 0.3.0
+#VERSION 0.3.1
 import random
 from copy import deepcopy
 import pygame, sys
@@ -79,9 +79,9 @@ class MancalaGame():
 
 class CUI():
     def __init__(self):
-        self.ai0=MiniMaxAI(10)
-        self.ai1=MiniMaxAI(10)
-        self.game=MancalaGame(3,4)
+        self.ai0=MiniMaxAI(5)
+        self.ai1=MiniMaxAI(5)
+        self.game=MancalaGame()
         looping=True
         while looping:
             self.printBoard()
@@ -101,12 +101,12 @@ class CUI():
                 print(self.ai0.getScoreWin(self.game))
                 looping=False
             else:
-                if self.game.turn==0:
+                if self.game.turn==1:
                     inp=str(self.ai0.getMove(self.game, possMoves))
                 else:
                     #inp=random.choice(sPossMoves) ##
-                    #inp=input() ##
-                    inp=str(self.ai1.getMove(self.game, possMoves)) ##
+                    inp=input() ##
+                    # inp=str(self.ai1.getMove(self.game, possMoves)) ##
             if inp=="end":
                 looping=False
             elif inp in sPossMoves:
@@ -133,12 +133,14 @@ class MiniMaxAI():
     def getMove(self, game, possMoves):
         if len(possMoves)==1:
             return possMoves[0]
-        move=possMoves.pop(random.randint(0,len(possMoves)-1))
-        temp_game=deepcopy(game)
-        temp_game.makeMove(move)
-        bestScore=self.minimax(temp_game, self.depth, temp_game.turn, temp_game.getPossMoves(), -1000000, 1000000)
-        bestMove=move
+        # move=possMoves.pop(random.randint(0,len(possMoves)-1)) ##this part makes it more random
+        # temp_game=deepcopy(game)
+        # temp_game.makeMove(move)
+        # bestScore=self.minimax(temp_game, self.depth, temp_game.turn, temp_game.getPossMoves(), -1000000, 1000000)
+        # bestMove=move
+        bestScore=1000000000*(game.turn-0.5)
         for move in possMoves:
+            # print(move)
             temp_game=deepcopy(game)
             temp_game.makeMove(move)
             temp_score=self.minimax(temp_game, self.depth, temp_game.turn, temp_game.getPossMoves(), -1000000, 1000000)
@@ -172,21 +174,30 @@ class MiniMaxAI():
             return score
         if turn==0:
             score = -10000000
+            if len(possMoves)==1:
+                # print("skip")
+                temp_game=self.altDeepcopy(game)
+                temp_game.makeMove(possMoves[0])
+                return self.minimax(temp_game, depth, 1, temp_game.getPossMoves(), alpha, beta)
             for move in possMoves:
                 # print(str(move)+" sub")
-                temp_game=self.altDeepcopy(game)
+                temp_game=deepcopy(game)
                 temp_game.makeMove(move)
                 score = max(score, self.minimax(temp_game, depth-1, 1, temp_game.getPossMoves(), alpha, beta))
                 alpha=max(alpha,score)
-                # for some reason this part of pruning doesn't work
                 if beta <= alpha: 
                     break
             return score
         else: #turn=1
             score = 10000000
+            if len(possMoves)==1:
+                # print("skip")
+                temp_game=deepcopy(game)
+                temp_game.makeMove(possMoves[0])
+                return self.minimax(temp_game, depth, 1, temp_game.getPossMoves(), alpha, beta)
             for move in possMoves:
                 # print(str(move)+" sub")
-                temp_game=self.altDeepcopy(game)
+                temp_game=deepcopy(game)
                 temp_game.makeMove(move)
                 score = min(score, self.minimax(temp_game, depth-1, 0, temp_game.getPossMoves(), alpha, beta))
                 beta=min(beta,score)
@@ -317,10 +328,10 @@ class GUI():
             self.ai=MiniMaxAI(2)
             self.playLoop()
         elif loop=="playHard":
-            self.ai=MiniMaxAI(5)
+            self.ai=MiniMaxAI(6)
             self.playLoop()
         elif loop=="playExpert":
-            self.ai=MiniMaxAI(9)
+            self.ai=MiniMaxAI(8)
             self.playLoop()
         elif loop=="undo":
             self.undo()
