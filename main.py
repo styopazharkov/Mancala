@@ -79,8 +79,8 @@ class MancalaGame():
 
 class CUI():
     def __init__(self):
-        self.ai0=MiniMaxAI(5)
-        self.ai1=MiniMaxAI(5)
+        self.ai0=MiniMaxAI(9)
+        self.ai1=MiniMaxAI(9)
         self.game=MancalaGame()
         looping=True
         while looping:
@@ -105,8 +105,8 @@ class CUI():
                     inp=str(self.ai0.getMove(self.game, possMoves))
                 else:
                     #inp=random.choice(sPossMoves) ##
-                    inp=input() ##
-                    # inp=str(self.ai1.getMove(self.game, possMoves)) ##
+                    #inp=input() ##
+                    inp=str(self.ai1.getMove(self.game, possMoves)) ##
             if inp=="end":
                 looping=False
             elif inp in sPossMoves:
